@@ -28,6 +28,15 @@ class CWallet;
 class WalletDatabase;
 struct WalletContext;
 
+static const DatabaseFormat DATABASE_FORMATS[] = {
+#ifdef USE_SQLITE
+       DatabaseFormat::SQLITE,
+#endif
+#ifdef USE_BDB
+       DatabaseFormat::BERKELEY,
+#endif
+};
+
 const std::string ADDRESS_BCRT1_UNSPENDABLE = "rric1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq46tsvq";
 
 std::unique_ptr<CWallet> CreateSyncedWallet(interfaces::Chain& chain, CChain& cchain, const CKey& key);
@@ -110,6 +119,7 @@ public:
     bool Backup(const std::string& strDest) const override { return m_pass; }
     void Flush() override {}
     void Close() override {}
+    bool PeriodicFlush() override { return m_pass; }
     void IncrementUpdateCounter() override {}
     void ReloadDbEnv() override {}
 

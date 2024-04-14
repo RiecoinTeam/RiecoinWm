@@ -42,7 +42,7 @@ bilingual_str GetWarnings(bool verbose)
 
     // Pre-release build warning
     if (!CLIENT_VERSION_IS_RELEASE) {
-        warnings_concise = _("This is a prerelease, be sure to follow the latest Riecoin news to be aware of possible bugs and updates!");
+        warnings_concise = _("This program is only intended to be used for Legacy Wallets migration. Once migrated, please switch to the regular Riecoin Core release.");
         warnings_verbose.emplace_back(warnings_concise);
     }
 

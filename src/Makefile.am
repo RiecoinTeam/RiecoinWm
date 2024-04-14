@@ -24,7 +24,6 @@ bin_PROGRAMS =
 noinst_PROGRAMS =
 check_PROGRAMS =
 TESTS =
-BENCHMARKS =
 
 BITCOIN_INCLUDES=-I$(builddir) -I$(srcdir)/$(MINISKETCH_INCLUDE_DIR_INT) -I$(srcdir)/secp256k1/include -I$(srcdir)/$(UNIVALUE_INCLUDE_DIR_INT)
 
@@ -45,7 +44,6 @@ LIBBITCOINKERNEL=libbitcoinkernel.la
 endif
 if ENABLE_WALLET
 LIBBITCOIN_WALLET=libbitcoin_wallet.a
-LIBBITCOIN_WALLET_TOOL=libbitcoin_wallet_tool.a
 endif
 
 LIBBITCOIN_CRYPTO = $(LIBBITCOIN_CRYPTO_BASE)
@@ -80,7 +78,6 @@ EXTRA_LIBRARIES += \
   $(LIBBITCOIN_CLI) \
   $(LIBBITCOIN_IPC) \
   $(LIBBITCOIN_WALLET) \
-  $(LIBBITCOIN_WALLET_TOOL) \
   $(LIBBITCOIN_ZMQ)
 
 if BUILD_BITCOIND
@@ -93,16 +90,6 @@ endif
 
 if BUILD_BITCOIN_CLI
   bin_PROGRAMS += riecoin-cli
-endif
-
-if BUILD_BITCOIN_TX
-  bin_PROGRAMS += riecoin-tx
-endif
-
-if ENABLE_WALLET
-if BUILD_BITCOIN_WALLET
-  bin_PROGRAMS += riecoin-wallet
-endif
 endif
 
 if BUILD_BITCOIN_CHAINSTATE
@@ -332,6 +319,7 @@ BITCOIN_CORE_H = \
   validation.h \
   validationinterface.h \
   versionbits.h \
+  wallet/bdb.h \
   wallet/coincontrol.h \
   wallet/coinselection.h \
   wallet/context.h \
@@ -465,6 +453,7 @@ libbitcoin_node_a_SOURCES = \
 
 if ENABLE_WALLET
 libbitcoin_node_a_SOURCES += wallet/init.cpp
+libbitcoin_node_a_CPPFLAGS += $(BDB_CPPFLAGS)
 endif
 if !ENABLE_WALLET
 libbitcoin_node_a_SOURCES += dummywallet.cpp
@@ -485,7 +474,7 @@ endif
 #
 
 # wallet #
-libbitcoin_wallet_a_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES) $(BOOST_CPPFLAGS) $(SQLITE_CFLAGS)
+libbitcoin_wallet_a_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES) $(BOOST_CPPFLAGS) $(BDB_CPPFLAGS) $(SQLITE_CFLAGS)
 libbitcoin_wallet_a_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 libbitcoin_wallet_a_SOURCES = \
   wallet/coincontrol.cpp \
@@ -520,13 +509,9 @@ libbitcoin_wallet_a_SOURCES = \
 if USE_SQLITE
 libbitcoin_wallet_a_SOURCES += wallet/sqlite.cpp
 endif
-
-# wallet tool #
-libbitcoin_wallet_tool_a_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES) $(BOOST_CPPFLAGS)
-libbitcoin_wallet_tool_a_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
-libbitcoin_wallet_tool_a_SOURCES = \
-  wallet/wallettool.cpp \
-  $(BITCOIN_CORE_H)
+if USE_BDB
+libbitcoin_wallet_a_SOURCES += wallet/bdb.cpp
+endif
 #
 
 # crypto #
@@ -783,7 +768,7 @@ riecoin_bin_ldadd = \
   $(LIBMEMENV) \
   $(LIBSECP256K1)
 
-riecoin_bin_ldadd += $(GMP_LIBS) $(MINIUPNPC_LIBS) $(NATPMP_LIBS) $(EVENT_PTHREADS_LIBS) $(EVENT_LIBS) $(ZMQ_LIBS) $(SQLITE_LIBS)
+riecoin_bin_ldadd += $(GMP_LIBS) $(BDB_LIBS) $(MINIUPNPC_LIBS) $(NATPMP_LIBS) $(EVENT_PTHREADS_LIBS) $(EVENT_LIBS) $(ZMQ_LIBS) $(SQLITE_LIBS)
 
 riecoind_SOURCES = $(riecoin_daemon_sources) init/bitcoind.cpp
 riecoind_CPPFLAGS = $(riecoin_bin_cppflags)
@@ -815,47 +800,6 @@ riecoin_cli_LDADD = \
   $(LIBBITCOIN_CRYPTO)
 
 riecoin_cli_LDADD += $(GMP_LIBS) $(EVENT_LIBS)
-#
-
-# bitcoin-tx binary #
-riecoin_tx_SOURCES = bitcoin-tx.cpp
-riecoin_tx_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES)
-riecoin_tx_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
-riecoin_tx_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_APP_LDFLAGS) $(PTHREAD_FLAGS)
-
-if TARGET_WINDOWS
-riecoin_tx_SOURCES += riecoin-tx-res.rc
-endif
-
-riecoin_tx_LDADD = \
-  $(LIBUNIVALUE) \
-  $(LIBBITCOIN_COMMON) \
-  $(LIBBITCOIN_UTIL) \
-  $(LIBBITCOIN_CONSENSUS) \
-  $(LIBBITCOIN_CRYPTO) \
-  $(LIBSECP256K1)
-#
-
-# bitcoin-wallet binary #
-riecoin_wallet_SOURCES = bitcoin-wallet.cpp
-riecoin_wallet_SOURCES += init/bitcoin-wallet.cpp
-riecoin_wallet_CPPFLAGS = $(riecoin_bin_cppflags)
-riecoin_wallet_CXXFLAGS = $(riecoin_bin_cxxflags)
-riecoin_wallet_LDFLAGS = $(riecoin_bin_ldflags)
-riecoin_wallet_LDADD = \
-  $(LIBBITCOIN_WALLET_TOOL) \
-  $(LIBBITCOIN_WALLET) \
-  $(LIBBITCOIN_COMMON) \
-  $(LIBBITCOIN_UTIL) \
-  $(LIBUNIVALUE) \
-  $(LIBBITCOIN_CONSENSUS) \
-  $(LIBBITCOIN_CRYPTO) \
-  $(LIBSECP256K1) \
-  $(SQLITE_LIBS)
-
-if TARGET_WINDOWS
-riecoin_wallet_SOURCES += riecoin-wallet-res.rc
-endif
 #
 
 # bitcoin-chainstate binary #
@@ -1088,10 +1032,6 @@ include Makefile.test_util.include
 include Makefile.test_fuzz.include
 
 include Makefile.test.include
-
-if ENABLE_BENCH
-include Makefile.bench.include
-endif
 
 if ENABLE_QT
 include Makefile.qt.include

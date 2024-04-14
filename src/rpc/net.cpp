@@ -864,27 +864,6 @@ static RPCHelpMan clearbanned()
     };
 }
 
-static RPCHelpMan setnetworkactive()
-{
-    return RPCHelpMan{"setnetworkactive",
-                "\nDisable/enable all p2p network activity.\n",
-                {
-                    {"state", RPCArg::Type::BOOL, RPCArg::Optional::NO, "true to enable networking, false to disable"},
-                },
-                RPCResult{RPCResult::Type::BOOL, "", "The value that was passed in"},
-                RPCExamples{""},
-        [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
-{
-    NodeContext& node = EnsureAnyNodeContext(request.context);
-    CConnman& connman = EnsureConnman(node);
-
-    connman.SetNetworkActive(request.params[0].get_bool());
-
-    return connman.GetNetworkActive();
-},
-    };
-}
-
 static RPCHelpMan getnodeaddresses()
 {
     return RPCHelpMan{"getnodeaddresses",
@@ -1170,7 +1149,6 @@ void RegisterNetRPCCommands(CRPCTable& t)
         {"network", &setban},
         {"network", &listbanned},
         {"network", &clearbanned},
-        {"network", &setnetworkactive},
         {"network", &getnodeaddresses},
         {"network", &getaddrmaninfo},
         {"hidden", &addconnection},

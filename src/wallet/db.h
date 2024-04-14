@@ -153,6 +153,9 @@ public:
      *  Also close the environment if no other databases are open in it.
      */
     virtual void Close() = 0;
+    /* flush the wallet passively (TRY_LOCK)
+       ideal to be called periodically */
+    virtual bool PeriodicFlush() = 0;
 
     virtual void IncrementUpdateCounter() = 0;
 
@@ -165,15 +168,22 @@ public:
 
     std::atomic<unsigned int> nUpdateCounter;
     unsigned int nLastSeen{0};
+    unsigned int nLastFlushed{0};
     int64_t nLastWalletUpdate{0};
 
     /** Make a DatabaseBatch connected to this database */
     virtual std::unique_ptr<DatabaseBatch> MakeBatch(bool flush_on_close = true) = 0;
 };
 
+enum class DatabaseFormat {
+    BERKELEY,
+    SQLITE,
+};
+
 struct DatabaseOptions {
     bool require_existing = false;
     bool require_create = false;
+    std::optional<DatabaseFormat> require_format;
     uint64_t create_flags = 0;
     SecureString create_passphrase;
 
@@ -204,7 +214,9 @@ std::vector<fs::path> ListDatabases(const fs::path& path);
 void ReadDatabaseArgs(const ArgsManager& args, DatabaseOptions& options);
 std::unique_ptr<WalletDatabase> MakeDatabase(const fs::path& path, const DatabaseOptions& options, DatabaseStatus& status, bilingual_str& error);
 
+fs::path BDBDataFile(const fs::path& path);
 fs::path SQLiteDataFile(const fs::path& path);
+bool IsBDBFile(const fs::path& path);
 bool IsSQLiteFile(const fs::path& path);
 } // namespace wallet
 

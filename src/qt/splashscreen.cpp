@@ -32,8 +32,8 @@ SplashScreen::SplashScreen(const NetworkStyle* networkStyle)
     : QWidget()
 {
     // set reference point, paddings
-    int paddingRight            = 30;
-    int paddingTop              = 225;
+    int paddingRight            = 90;
+    int paddingTop              = 120;
     int titleVersionVSpace      = 15;
     int titleCopyrightVSpace    = 30;
 
@@ -59,33 +59,12 @@ SplashScreen::SplashScreen(const NetworkStyle* networkStyle)
     QPainter pixPaint(&pixmap);
     pixPaint.setPen(QColor(224, 224, 224));
 
-    // draw a slightly radial gradient
-    QRadialGradient gradient(QPoint(0,0), splashSize.width()/devicePixelRatio);
-    if (titleAddText == "[test]")
-        gradient.setColorAt(0, QColor(0, 112, 128));
-    else if (titleAddText == "[regtest]")
-        gradient.setColorAt(0, QColor(128, 0, 112));
-    else
-        gradient.setColorAt(0, QColor(0, 128, 112));
-    gradient.setColorAt(1, Qt::black);
-    QRect rGradient(QPoint(0,0), splashSize);
-    pixPaint.fillRect(rGradient, gradient);
-
-    // draw the Riecoin icon, expected size of PNG: 1024x1024
-    QRect rectIcon(QPoint(-120 ,-120), QSize(420, 420));
-
-    const QSize requiredSize(1024,1024);
-    QPixmap icon(networkStyle->getAppIcon().pixmap(requiredSize));
-    pixPaint.setRenderHint(QPainter::SmoothPixmapTransform);
-    pixPaint.drawPixmap(rectIcon, icon);
-
     // check font size and drawing with
     pixPaint.setFont(QFont(font, 33*fontFactor));
     QFontMetrics fm = pixPaint.fontMetrics();
     int titleTextWidth = GUIUtil::TextWidth(fm, titleText);
-    if (titleTextWidth > 176) {
-        fontFactor = fontFactor * 176 / titleTextWidth;
-    }
+    if (titleTextWidth > 255)
+        fontFactor = fontFactor*255/titleTextWidth;
 
     pixPaint.setFont(QFont(font, 33*fontFactor));
     fm = pixPaint.fontMetrics();

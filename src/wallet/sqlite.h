@@ -159,6 +159,7 @@ public:
      * There is no DB env to reload, so ReloadDbEnv has nothing to do
      */
     void Flush() override {}
+    bool PeriodicFlush() override { return false; }
     void ReloadDbEnv() override {}
 
     void IncrementUpdateCounter() override { ++nUpdateCounter; }

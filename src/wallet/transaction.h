@@ -132,7 +132,7 @@ std::string TxStateString(const T& state)
  */
 struct CachableAmount
 {
-    // NO is never (supposed to be) cached
+    // NO and ALL are never (supposed to be) cached
     std::bitset<ISMINE_ENUM_ELEMENTS> m_cached;
     CAmount m_value[ISMINE_ENUM_ELEMENTS];
     inline void Reset()

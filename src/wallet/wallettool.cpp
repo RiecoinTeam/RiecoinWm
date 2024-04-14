@@ -32,9 +32,17 @@ static void WalletToolReleaseWallet(CWallet* wallet)
 static void WalletCreate(CWallet* wallet_instance, uint64_t wallet_creation_flags)
 {
     LOCK(wallet_instance->cs_wallet);
+
     wallet_instance->SetMinVersion(FEATURE_LATEST);
     wallet_instance->InitWalletFlags(wallet_creation_flags);
-    wallet_instance->SetupDescriptorScriptPubKeyMans();
+
+    if (!wallet_instance->IsWalletFlagSet(WALLET_FLAG_DESCRIPTORS)) {
+        auto spk_man = wallet_instance->GetOrCreateLegacyScriptPubKeyMan();
+        spk_man->SetupGeneration(false);
+    } else {
+        wallet_instance->SetupDescriptorScriptPubKeyMans();
+    }
+
     tfm::format(std::cout, "Topping up keypool...\n");
     wallet_instance->TopUpKeyPool();
 }

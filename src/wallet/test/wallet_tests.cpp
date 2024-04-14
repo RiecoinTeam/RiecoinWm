@@ -271,11 +271,12 @@ BOOST_AUTO_TEST_CASE(ComputeTimeSmart)
     BOOST_CHECK_EQUAL(AddTx(*m_node.chainman, m_wallet, 5, 50, 600), 300);
 }
 
-void TestLoadWallet(const std::string& name, std::function<void(std::shared_ptr<CWallet>)> f)
+void TestLoadWallet(const std::string& name, DatabaseFormat format, std::function<void(std::shared_ptr<CWallet>)> f)
 {
     node::NodeContext node;
     auto chain{interfaces::MakeChain(node)};
     DatabaseOptions options;
+    options.require_format = format;
     DatabaseStatus status;
     bilingual_str error;
     std::vector<bilingual_str> warnings;
@@ -287,39 +288,39 @@ void TestLoadWallet(const std::string& name, std::function<void(std::shared_ptr<
 
 BOOST_FIXTURE_TEST_CASE(LoadReceiveRequests, TestingSetup)
 {
-#ifdef USE_SQLITE
-    const std::string name{"receive-requests"};
-    TestLoadWallet(name, [](std::shared_ptr<CWallet> wallet) EXCLUSIVE_LOCKS_REQUIRED(wallet->cs_wallet) {
-        BOOST_CHECK(!wallet->IsAddressPreviouslySpent(PKHash()));
-        WalletBatch batch{wallet->GetDatabase()};
-        BOOST_CHECK(batch.WriteAddressPreviouslySpent(PKHash(), true));
-        BOOST_CHECK(batch.WriteAddressPreviouslySpent(ScriptHash(), true));
-        BOOST_CHECK(wallet->SetAddressReceiveRequest(batch, PKHash(), "0", "val_rr00"));
-        BOOST_CHECK(wallet->EraseAddressReceiveRequest(batch, PKHash(), "0"));
-        BOOST_CHECK(wallet->SetAddressReceiveRequest(batch, PKHash(), "1", "val_rr10"));
-        BOOST_CHECK(wallet->SetAddressReceiveRequest(batch, PKHash(), "1", "val_rr11"));
-        BOOST_CHECK(wallet->SetAddressReceiveRequest(batch, ScriptHash(), "2", "val_rr20"));
-    });
-    TestLoadWallet(name, [](std::shared_ptr<CWallet> wallet) EXCLUSIVE_LOCKS_REQUIRED(wallet->cs_wallet) {
-        BOOST_CHECK(wallet->IsAddressPreviouslySpent(PKHash()));
-        BOOST_CHECK(wallet->IsAddressPreviouslySpent(ScriptHash()));
-        auto requests = wallet->GetAddressReceiveRequests();
-        auto erequests = {"val_rr11", "val_rr20"};
-        BOOST_CHECK_EQUAL_COLLECTIONS(requests.begin(), requests.end(), std::begin(erequests), std::end(erequests));
-        RunWithinTxn(wallet->GetDatabase(), /*process_desc*/"test", [](WalletBatch& batch){
-            BOOST_CHECK(batch.WriteAddressPreviouslySpent(PKHash(), false));
-            BOOST_CHECK(batch.EraseAddressData(ScriptHash()));
-            return true;
+    for (DatabaseFormat format : DATABASE_FORMATS) {
+        const std::string name{strprintf("receive-requests-%i", format)};
+        TestLoadWallet(name, format, [](std::shared_ptr<CWallet> wallet) EXCLUSIVE_LOCKS_REQUIRED(wallet->cs_wallet) {
+            BOOST_CHECK(!wallet->IsAddressPreviouslySpent(PKHash()));
+            WalletBatch batch{wallet->GetDatabase()};
+            BOOST_CHECK(batch.WriteAddressPreviouslySpent(PKHash(), true));
+            BOOST_CHECK(batch.WriteAddressPreviouslySpent(ScriptHash(), true));
+            BOOST_CHECK(wallet->SetAddressReceiveRequest(batch, PKHash(), "0", "val_rr00"));
+            BOOST_CHECK(wallet->EraseAddressReceiveRequest(batch, PKHash(), "0"));
+            BOOST_CHECK(wallet->SetAddressReceiveRequest(batch, PKHash(), "1", "val_rr10"));
+            BOOST_CHECK(wallet->SetAddressReceiveRequest(batch, PKHash(), "1", "val_rr11"));
+            BOOST_CHECK(wallet->SetAddressReceiveRequest(batch, ScriptHash(), "2", "val_rr20"));
         });
-    });
-    TestLoadWallet(name, [](std::shared_ptr<CWallet> wallet) EXCLUSIVE_LOCKS_REQUIRED(wallet->cs_wallet) {
-        BOOST_CHECK(!wallet->IsAddressPreviouslySpent(PKHash()));
-        BOOST_CHECK(!wallet->IsAddressPreviouslySpent(ScriptHash()));
-        auto requests = wallet->GetAddressReceiveRequests();
-        auto erequests = {"val_rr11"};
-        BOOST_CHECK_EQUAL_COLLECTIONS(requests.begin(), requests.end(), std::begin(erequests), std::end(erequests));
-    });
-#endif
+        TestLoadWallet(name, format, [](std::shared_ptr<CWallet> wallet) EXCLUSIVE_LOCKS_REQUIRED(wallet->cs_wallet) {
+            BOOST_CHECK(wallet->IsAddressPreviouslySpent(PKHash()));
+            BOOST_CHECK(wallet->IsAddressPreviouslySpent(ScriptHash()));
+            auto requests = wallet->GetAddressReceiveRequests();
+            auto erequests = {"val_rr11", "val_rr20"};
+            BOOST_CHECK_EQUAL_COLLECTIONS(requests.begin(), requests.end(), std::begin(erequests), std::end(erequests));
+            RunWithinTxn(wallet->GetDatabase(), /*process_desc*/"test", [](WalletBatch& batch){
+                BOOST_CHECK(batch.WriteAddressPreviouslySpent(PKHash(), false));
+                BOOST_CHECK(batch.EraseAddressData(ScriptHash()));
+                return true;
+            });
+        });
+        TestLoadWallet(name, format, [](std::shared_ptr<CWallet> wallet) EXCLUSIVE_LOCKS_REQUIRED(wallet->cs_wallet) {
+            BOOST_CHECK(!wallet->IsAddressPreviouslySpent(PKHash()));
+            BOOST_CHECK(!wallet->IsAddressPreviouslySpent(ScriptHash()));
+            auto requests = wallet->GetAddressReceiveRequests();
+            auto erequests = {"val_rr11"};
+            BOOST_CHECK_EQUAL_COLLECTIONS(requests.begin(), requests.end(), std::begin(erequests), std::end(erequests));
+        });
+    }
 }
 
 class ListCoinsTestingSetup : public TestChain100Setup
@@ -464,6 +465,14 @@ BOOST_FIXTURE_TEST_CASE(BasicOutputTypesTest, ListCoinsTest)
 
 BOOST_FIXTURE_TEST_CASE(wallet_disableprivkeys, TestChain100Setup)
 {
+    {
+        const std::shared_ptr<CWallet> wallet = std::make_shared<CWallet>(m_node.chain.get(), "", CreateMockableWalletDatabase());
+        wallet->SetupLegacyScriptPubKeyMan();
+        wallet->SetMinVersion(FEATURE_LATEST);
+        wallet->SetWalletFlag(WALLET_FLAG_DISABLE_PRIVATE_KEYS);
+        BOOST_CHECK(!wallet->TopUpKeyPool(1000));
+        BOOST_CHECK(!wallet->GetNewDestination(OutputType::BECH32, ""));
+    }
     {
         const std::shared_ptr<CWallet> wallet = std::make_shared<CWallet>(m_node.chain.get(), "", CreateMockableWalletDatabase());
         LOCK(wallet->cs_wallet);

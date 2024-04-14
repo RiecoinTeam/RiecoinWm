@@ -93,17 +93,7 @@ std::string LicenseInfo()
 {
     const std::string URL_SOURCE_CODE = "<https://github.com/RiecoinTeam/Riecoin>";
 
-    return CopyrightHolders("(C) ") + "" +
-           "\n Riecoin Core 24.04 is based on Bitcoin Core (Master 2024-04/~27.0).\n" +
-           strprintf(_("Please contribute if you find %s useful. "
-                       "Visit %s for further information about the software.").translated, PACKAGE_NAME, "<" PACKAGE_URL ">") +
-           "\n" +
-           strprintf(_("The source code is available from %s. Support us by starring our repositories!").translated, URL_SOURCE_CODE) +
-           "\n\n Riecoin Forum: <https://riecoin.xyz/Forum>" +
-           "\n Discord: <https://discord.gg/2sJEayC>" +
-           "\n X: <https://twitter.com/RiecoinDev>" +
-           "\n Reddit: <https://www.reddit.com/r/Riecoin/>\n\n" +
-           _("This is experimental software.").translated + "\n" +
+    return CopyrightHolders("(C) ") + "\n This is a stripped down Riecoin Core 24.04, allowing to perform migration from Legacy to Descriptor Wallets.\n" +
            strprintf(_("Distributed under the MIT software license, see the accompanying file %s or %s").translated, "COPYING", "<https://opensource.org/licenses/MIT>") +
            "\n";
 }

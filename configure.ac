@@ -1,13 +1,13 @@
 AC_PREREQ([2.69])
-define(_CLIENT_VERSION_MAJOR, 24)
-define(_CLIENT_VERSION_MINOR, 04)
+define(_CLIENT_VERSION_MAJOR, 1)
+define(_CLIENT_VERSION_MINOR, 0)
 define(_CLIENT_VERSION_BUILD, 0)
 define(_CLIENT_VERSION_RC, 0)
 define(_CLIENT_VERSION_IS_RELEASE, false)
 define(_COPYRIGHT_YEAR, 2024)
 define(_COPYRIGHT_HOLDERS,[The %s developers])
 define(_COPYRIGHT_HOLDERS_SUBSTITUTION,[[Riecoin]])
-AC_INIT([Riecoin Core],m4_join([.], _CLIENT_VERSION_MAJOR, _CLIENT_VERSION_MINOR),[https://riecoin.xyz/Forum],[riecoin],[https://riecoin.xyz/])
+AC_INIT([Riecoin Wallet Migrator],m4_join([.], _CLIENT_VERSION_MAJOR, _CLIENT_VERSION_MINOR),[https://riecoin.xyz/Forum],[riecoin],[https://riecoin.xyz/])
 AC_CONFIG_SRCDIR([src/validation.cpp])
 AC_CONFIG_HEADERS([src/config/bitcoin-config.h])
 AC_CONFIG_AUX_DIR([build-aux])
@@ -33,9 +33,7 @@ BITCOIN_DAEMON_NAME=riecoind
 BITCOIN_GUI_NAME=riecoin-qt
 BITCOIN_TEST_NAME=test_riecoin
 BITCOIN_CLI_NAME=riecoin-cli
-BITCOIN_TX_NAME=riecoin-tx
 BITCOIN_CHAINSTATE_NAME=riecoin-chainstate
-BITCOIN_WALLET_TOOL_NAME=riecoin-wallet
 dnl Multi Process
 BITCOIN_MP_NODE_NAME=riecoin-node
 BITCOIN_MP_GUI_NAME=riecoin-gui
@@ -139,6 +137,12 @@ AC_ARG_WITH([sqlite],
   [enable sqlite wallet support (default: auto, i.e., enabled if wallet is enabled and sqlite is found)])],
   [use_sqlite=$withval],
   [use_sqlite=auto])
+
+AC_ARG_WITH([bdb],
+  [AS_HELP_STRING([--without-bdb],
+  [disable bdb wallet support (default is enabled if wallet is enabled)])],
+  [use_bdb=$withval],
+  [use_bdb=auto])
 
 AC_ARG_ENABLE([usdt],
   [AS_HELP_STRING([--enable-usdt],
@@ -262,7 +266,7 @@ AC_ARG_WITH([mpgen],
 
 AC_ARG_ENABLE([multiprocess],
   [AS_HELP_STRING([--enable-multiprocess],
-  [build multiprocess riecoin-node, riecoin-wallet, and riecoin-gui executables in addition to monolithic riecoind and riecoin-qt executables. Requires libmultiprocess library. Experimental (default is no)])],
+  [build multiprocess riecoin-node, and riecoin-gui executables in addition to monolithic riecoind and riecoin-qt executables. Requires libmultiprocess library. Experimental (default is no)])],
   [enable_multiprocess=$enableval],
   [enable_multiprocess=no])
 
@@ -585,7 +589,7 @@ CORE_CPPFLAGS="$CORE_CPPFLAGS -DHAVE_BUILD_INFO"
 
 AC_ARG_WITH([utils],
   [AS_HELP_STRING([--with-utils],
-  [build riecoin-cli riecoin-tx riecoin-wallet (default=yes)])],
+  [build riecoin-cli (default=yes)])],
   [build_bitcoin_utils=$withval],
   [build_bitcoin_utils=yes])
 
@@ -594,18 +598,6 @@ AC_ARG_ENABLE([util-cli],
   [build riecoin-cli])],
   [build_bitcoin_cli=$enableval],
   [build_bitcoin_cli=$build_bitcoin_utils])
-
-AC_ARG_ENABLE([util-tx],
-  [AS_HELP_STRING([--enable-util-tx],
-  [build riecoin-tx])],
-  [build_bitcoin_tx=$enableval],
-  [build_bitcoin_tx=$build_bitcoin_utils])
-
-AC_ARG_ENABLE([util-wallet],
-  [AS_HELP_STRING([--enable-util-wallet],
-  [build riecoin-wallet])],
-  [build_bitcoin_wallet=$enableval],
-  [build_bitcoin_wallet=$build_bitcoin_utils])
 
 AC_ARG_ENABLE([experimental-util-chainstate],
   [AS_HELP_STRING([--enable-experimental-util-chainstate],
@@ -699,6 +691,13 @@ case $host in
          dnl of search paths in case it's not already there.
          if test "$suppress_external_warnings" != "no"; then
            AX_CHECK_PREPROC_FLAG([-Xclang -internal-isystem -Xclang /usr/local/include/], [CORE_CPPFLAGS="$CORE_CPPFLAGS -Xclang -internal-isystem -Xclang /usr/local/include/"], [], [$CXXFLAG_WERROR])
+         fi
+
+         if test "$use_bdb" != "no" && $BREW list --versions berkeley-db@4 >/dev/null && test "$BDB_CFLAGS" = "" && test "$BDB_LIBS" = ""; then
+           bdb_prefix=$($BREW --prefix berkeley-db@4 2>/dev/null)
+           dnl This must precede the call to BITCOIN_FIND_BDB48 below.
+           BDB_CFLAGS="-I$bdb_prefix/include"
+           BDB_LIBS="-L$bdb_prefix/lib -ldb_cxx-4.8"
          fi
 
          if $BREW list --versions qt@5 >/dev/null; then
@@ -1262,6 +1261,14 @@ if test "$enable_fuzz_binary" = "yes"; then
 fi
 
 if test "$enable_wallet" != "no"; then
+    dnl Check for libdb_cxx only if wallet enabled
+    if test "$use_bdb" != "no"; then
+      BITCOIN_FIND_BDB48
+      if test "$suppress_external_warnings" != "no" ; then
+        BDB_CPPFLAGS=SUPPRESS_WARNINGS($BDB_CPPFLAGS)
+      fi
+    fi
+
     dnl Check for sqlite3
     if test "$use_sqlite" != "no"; then
       PKG_CHECK_MODULES([SQLITE], [sqlite3 >= 3.7.17], [have_sqlite=yes], [have_sqlite=no])
@@ -1282,10 +1289,10 @@ if test "$enable_wallet" != "no"; then
     fi
     AC_MSG_RESULT([$use_sqlite])
 
-    dnl Disable wallet if --without-sqlite
-    if test "$use_sqlite" = "no"; then
+    dnl Disable wallet if both --without-bdb and --without-sqlite
+    if test "$use_bdb$use_sqlite" = "nono"; then
         if test "$enable_wallet" = "yes"; then
-            AC_MSG_ERROR([wallet functionality requested but no SQLite support available.])
+            AC_MSG_ERROR([wallet functionality requested but no BDB or SQLite support available.])
         fi
         enable_wallet=no
     fi
@@ -1522,14 +1529,6 @@ AC_MSG_CHECKING([whether to build riecoin-cli])
 AM_CONDITIONAL([BUILD_BITCOIN_CLI], [test $build_bitcoin_cli = "yes"])
 AC_MSG_RESULT($build_bitcoin_cli)
 
-AC_MSG_CHECKING([whether to build riecoin-tx])
-AM_CONDITIONAL([BUILD_BITCOIN_TX], [test $build_bitcoin_tx = "yes"])
-AC_MSG_RESULT($build_bitcoin_tx)
-
-AC_MSG_CHECKING([whether to build riecoin-wallet])
-AM_CONDITIONAL([BUILD_BITCOIN_WALLET], [test $build_bitcoin_wallet = "yes"])
-AC_MSG_RESULT($build_bitcoin_wallet)
-
 AC_MSG_CHECKING([whether to build experimental bitcoin-chainstate])
 if test "$build_bitcoin_chainstate" = "yes"; then
   if test "$build_experimental_kernel_lib" = "no"; then
@@ -1684,6 +1683,7 @@ AM_CONDITIONAL([TARGET_LINUX], [test "$TARGET_OS" = "linux"])
 AM_CONDITIONAL([TARGET_WINDOWS], [test "$TARGET_OS" = "windows"])
 AM_CONDITIONAL([ENABLE_WALLET], [test "$enable_wallet" = "yes"])
 AM_CONDITIONAL([USE_SQLITE], [test "$use_sqlite" = "yes"])
+AM_CONDITIONAL([USE_BDB], [test "$use_bdb" = "yes"])
 AM_CONDITIONAL([ENABLE_TESTS], [test "$BUILD_TEST" = "yes"])
 AM_CONDITIONAL([ENABLE_FUZZ], [test "$enable_fuzz" = "yes"])
 AM_CONDITIONAL([ENABLE_FUZZ_BINARY], [test "$enable_fuzz_binary" = "yes"])
@@ -1729,9 +1729,7 @@ AC_SUBST(BITCOIN_DAEMON_NAME)
 AC_SUBST(BITCOIN_GUI_NAME)
 AC_SUBST(BITCOIN_TEST_NAME)
 AC_SUBST(BITCOIN_CLI_NAME)
-AC_SUBST(BITCOIN_TX_NAME)
 AC_SUBST(BITCOIN_CHAINSTATE_NAME)
-AC_SUBST(BITCOIN_WALLET_TOOL_NAME)
 AC_SUBST(BITCOIN_MP_NODE_NAME)
 AC_SUBST(BITCOIN_MP_GUI_NAME)
 
@@ -1762,6 +1760,7 @@ AC_SUBST(ARM_CRC_CXXFLAGS)
 AC_SUBST(ARM_SHANI_CXXFLAGS)
 AC_SUBST(LIBTOOL_APP_LDFLAGS)
 AC_SUBST(USE_SQLITE)
+AC_SUBST(USE_BDB)
 AC_SUBST(ENABLE_EXTERNAL_SIGNER)
 AC_SUBST(USE_UPNP)
 AC_SUBST(USE_QRCODE)
@@ -1834,6 +1833,7 @@ echo "  multiprocess    = $build_multiprocess"
 echo "  with wallet     = $enable_wallet"
 if test "$enable_wallet" != "no"; then
     echo "    with sqlite   = $use_sqlite"
+    echo "    with bdb      = $use_bdb"
 fi
 echo "  with gui / qt   = $bitcoin_enable_qt"
 if test $bitcoin_enable_qt != "no"; then

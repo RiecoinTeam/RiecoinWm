@@ -1056,11 +1056,12 @@ bool BlockManager::ReadBlockFromDisk(CBlock& block, const FlatFilePos& pos) cons
         return false;
     }
 
+    // This makes Wallet rescanning very long and disabling this check should not have any practical drawback. So, assume that the disk's PoW data is valid.
     // Check the header
-    if (!CheckProofOfWork(block.GetHashForPoW(), block.nBits, ArithToUint256(block.nNonce), GetConsensus())) {
+    /*if (!CheckProofOfWork(block.GetHashForPoW(), block.nBits, ArithToUint256(block.nNonce), GetConsensus())) {
         LogError("ReadBlockFromDisk: Errors in block header at %s\n", pos.ToString());
         return false;
-    }
+    }*/
 
     return true;
 }

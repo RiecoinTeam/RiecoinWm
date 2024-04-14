@@ -8,7 +8,6 @@
 #include <qt/addressbookpage.h>
 #include <qt/askpassphrasedialog.h>
 #include <qt/clientmodel.h>
-#include <qt/generatecodedialog.h>
 #include <qt/guiutil.h>
 #include <qt/optionsmodel.h>
 #include <qt/overviewpage.h>
@@ -166,13 +165,6 @@ void WalletView::gotoSendCoinsPage(QString addr)
 
     if (!addr.isEmpty())
         sendCoinsPage->setAddress(addr);
-}
-
-void WalletView::generateCode()
-{
-    GenerateCodeDialog *generateCodeDialog = new GenerateCodeDialog(platformStyle, this);
-    generateCodeDialog->setAttribute(Qt::WA_DeleteOnClose);
-    generateCodeDialog->setModel(walletModel);
 }
 
 void WalletView::gotoSignMessageTab(QString addr)
